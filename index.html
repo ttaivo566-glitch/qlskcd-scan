@@ -158,7 +158,7 @@
       return {
         cccd: cccd,
         cmnd_cu: (parts[1] || '').trim(),
-        ho_ten: (parts[2] || '').trim(),
+        ho_ten: (parts[2] || '').trim().toUpperCase(),
         ngay_sinh: formatDate((parts[3] || '').trim()),
         gioi_tinh: gioiTinh,
         dia_chi_full: (parts[5] || '').trim(),
