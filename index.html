@@ -179,25 +179,20 @@
       return raw.slice(0, 2) + '/' + raw.slice(2, 4) + '/' + raw.slice(4, 8);
     }
 
-    // Tách chuỗi địa chỉ QR (VD: "21/3 Lý Phục Mân, KP.29, Phường Tân Thuận, Quận 7, Thành phố Hồ Chí Minh")
-    // thành 3 phần: địa chỉ/đường (không gồm phường & tỉnh/thành), Phường, Tỉnh/Thành phố.
+    // Tách chuỗi địa chỉ QR (VD: "21/3 Lý Phục Mân, KP.29, Tân Thuận, Quận 7, Hồ Chí Minh")
+    // theo vị trí: đoạn cuối cùng = Tỉnh/Thành phố, đoạn kế cuối = Phường,
+    // phần còn lại (từ đầu) = địa chỉ/số nhà/đường.
     function splitAddress(fullAddress) {
       if (!fullAddress) return { dia_chi: '', phuong: '', tinh_thanhpho: '' };
       const segments = fullAddress.split(',').map((s) => s.trim()).filter(Boolean);
-      if (!segments.length) return { dia_chi: '', phuong: '', tinh_thanhpho: '' };
 
-      // Tỉnh/Thành phố luôn là đoạn cuối cùng
-      const tinhIndex = segments.length - 1;
-      const tinh_thanhpho = segments[tinhIndex];
+      if (segments.length === 0) return { dia_chi: '', phuong: '', tinh_thanhpho: '' };
+      if (segments.length === 1) return { dia_chi: segments[0], phuong: '', tinh_thanhpho: '' };
+      if (segments.length === 2) return { dia_chi: '', phuong: segments[0], tinh_thanhpho: segments[1] };
 
-      // Đoạn chứa "Phường/Xã/Thị trấn"
-      const phuongIndex = segments.findIndex((s) => /^(Phường|Xã|Thị trấn)\s/i.test(s));
-      const phuong = phuongIndex !== -1 ? segments[phuongIndex] : '';
-
-      // Địa chỉ/đường = các đoạn còn lại, giữ đúng thứ tự
-      const dia_chi = segments
-        .filter((s, idx) => idx !== phuongIndex && idx !== tinhIndex)
-        .join(', ');
+      const tinh_thanhpho = segments[segments.length - 1];
+      const phuong = segments[segments.length - 2];
+      const dia_chi = segments.slice(0, segments.length - 2).join(', ');
 
       return { dia_chi, phuong, tinh_thanhpho };
     }
