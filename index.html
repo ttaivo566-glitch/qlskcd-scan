@@ -1,1 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 12px; background: #f5f5f5; }
+    h3 { text-align: center; }
+    #video-wrap { position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; }
+    video { width: 100%; display: block; }
+    #status { text-align: center; padding: 10px; font-weight: bold; border-radius: 6px; margin: 10px 0; }
+    .status-scanning { background: #e7f1ff; color: #0d6efd; }
+    .status-success { background: #d4edda; color: #155724; }
+    .status-fail { background: #f8d7da; color: #721c24; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0; background: #fff; border-radius: 6px; overflow: hidden; }
+    td { padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 14px; }
+    td.label { color: #666; width: 42%; }
+    .btn { display: block; width: 100%; padding: 12px; margin: 8px 0; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+    .btn-submit { background: #198754; color: #fff; }
+    .btn-clear { background: #dc3545; color: #fff; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    #submit-status { text-align: center; font-size: 14px; min-height: 20px; margin-top: 4px; }
+    #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+    #overlay.show { display: flex; }
+    #confirm-box { background: #fff; padding: 20px; border-radius: 8px; max-width: 300px; text-align: center; }
+    #confirm-box button { margin: 10px 6px 0; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; color: #fff; }
+  </style>
+</head>
+<body>
+  <h3>Quét mã QR CCCD</h3>
 
+  <div id="video-wrap">
+    <video id="video" autoplay playsinline muted></video>
+  </div>
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <div id="status" class="status-scanning">Đang mở camera...</div>
+
+  <div id="result" style="display:none;">
+    <table>
+      <tr><td class="label">Số CCCD</td><td id="r-cccd"></td></tr>
+      <tr><td class="label">Họ và tên</td><td id="r-hoten"></td></tr>
+      <tr><td class="label">Ngày sinh</td><td id="r-ngaysinh"></td></tr>
+      <tr><td class="label">Giới tính</td><td id="r-gioitinh"></td></tr>
+      <tr><td class="label">Địa chỉ (theo QR)</td><td id="r-diachi"></td></tr>
+      <tr><td class="label">Ngày cấp</td><td id="r-ngaycap"></td></tr>
+    </table>
+    <button class="btn btn-submit" id="btn-submit">Gửi lên Google Sheet</button>
+    <button class="btn btn-clear" id="btn-clear">Xóa thông tin đã quét</button>
+    <div id="submit-status"></div>
+  </div>
+
+  <div id="overlay">
+    <div id="confirm-box">
+      <p>Bạn có chắc muốn xóa thông tin vừa quét?</p>
+      <button id="confirm-yes" style="background:#dc3545;">Xóa</button>
+      <button id="confirm-no" style="background:#6c757d;">Hủy</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script>
+    // Dán URL Web App Apps Script (deploy từ Code.gs) vào đây
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
+
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+
+    let stream = null;
+    let rafId = null;
+    let scannedData = null;
+
+    function setStatus(text, type) {
+      statusEl.textContent = text;
+      statusEl.className = 'status-' + type;
+    }
+
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } }
+        });
+        video.srcObject = stream;
+        await video.play();
+        setStatus('Đang quét... đưa mã QR vào khung hình', 'scanning');
+        scanLoop();
+      } catch (err) {
+        setStatus('Không mở được camera: ' + err.message, 'fail');
+      }
+    }
+
+    function scanLoop() {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imgData.data, imgData.width, imgData.height);
+        if (code && code.data) {
+          handleDecoded(code.data);
+          return;
+        }
+      }
+      rafId = requestAnimationFrame(scanLoop);
+    }
+
+    function handleDecoded(text) {
+      const parsed = parseCccdQr(text);
+      if (!parsed) {
+        setStatus('Quét thất bại: mã không đúng định dạng CCCD, thử lại...', 'fail');
+        rafId = requestAnimationFrame(scanLoop);
+        return;
+      }
+      scannedData = parsed;
+      pauseCamera();
+      showResult(parsed);
+      setStatus('Quét thành công!', 'success');
+    }
+
+    // Mã QR CCCD (theo TT59/2021) dạng: soCCCD|soCMNDcu|HoTen|NgaySinh|GioiTinh|DiaChi|NgayCap
+    function parseCccdQr(text) {
+      const parts = text.split('|');
+      if (parts.length < 6) return null;
+      const cccd = parts[0].trim();
+      if (!/^\d{12}$/.test(cccd)) return null;
+
+      // Xác định giới tính theo số thứ 4 trong CCCD (không dùng field giới tính trong QR)
+      const genderDigit = cccd.charAt(3);
+      let gioiTinh = '';
+      if (genderDigit === '1' || genderDigit === '3') gioiTinh = 'Nữ';
+      else if (genderDigit === '0' || genderDigit === '2') gioiTinh = 'Nam';
+
+      return {
+        cccd: cccd,
+        cmnd_cu: (parts[1] || '').trim(),
+        ho_ten: (parts[2] || '').trim(),
+        ngay_sinh: formatDate((parts[3] || '').trim()),
+        gioi_tinh: gioiTinh,
+        dia_chi_full: (parts[5] || '').trim(),
+        ngay_cap: parts[6] ? formatDate(parts[6].trim()) : '',
+      };
+    }
+
+    function formatDate(raw) {
+      if (!/^\d{8}$/.test(raw)) return raw;
+      return raw.slice(0, 2) + '/' + raw.slice(2, 4) + '/' + raw.slice(4, 8);
+    }
+
+    function showResult(data) {
+      document.getElementById('r-cccd').textContent = data.cccd;
+      document.getElementById('r-hoten').textContent = data.ho_ten;
+      document.getElementById('r-ngaysinh').textContent = data.ngay_sinh;
+      document.getElementById('r-gioitinh').textContent = data.gioi_tinh;
+      document.getElementById('r-diachi').textContent = data.dia_chi_full;
+      document.getElementById('r-ngaycap').textContent = data.ngay_cap;
+      resultEl.style.display = 'block';
+      document.getElementById('submit-status').textContent = '';
+    }
+
+    function pauseCamera() {
+      if (rafId) cancelAnimationFrame(rafId);
+      video.pause();
+    }
+
+    function resumeCamera() {
+      video.play();
+      setStatus('Đang quét... đưa mã QR vào khung hình', 'scanning');
+      scanLoop();
+    }
+
+    document.getElementById('btn-submit').addEventListener('click', function () {
+      if (!scannedData) return;
+      const btn = this;
+      btn.disabled = true;
+      document.getElementById('submit-status').textContent = 'Đang gửi...';
+
+      const params = new URLSearchParams({ action: 'save', ...scannedData });
+      fetch(APPS_SCRIPT_URL + '?' + params.toString())
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success) {
+            document.getElementById('submit-status').textContent = '✔ Đã gửi thành công lên Google Sheet';
+          } else {
+            document.getElementById('submit-status').textContent = '✘ Lỗi khi gửi: ' + (json.error || 'không rõ nguyên nhân');
+          }
+          btn.disabled = false;
+        })
+        .catch((err) => {
+          document.getElementById('submit-status').textContent = '✘ Lỗi khi gửi: ' + err.message;
+          btn.disabled = false;
+        });
+    });
+
+    document.getElementById('btn-clear').addEventListener('click', function () {
+      document.getElementById('overlay').classList.add('show');
+    });
+    document.getElementById('confirm-yes').addEventListener('click', function () {
+      document.getElementById('overlay').classList.remove('show');
+      scannedData = null;
+      resultEl.style.display = 'none';
+      resumeCamera();
+    });
+    document.getElementById('confirm-no').addEventListener('click', function () {
+      document.getElementById('overlay').classList.remove('show');
+    });
+
+    // Tự động mở camera ngay khi vào trang (trình duyệt vẫn hỏi quyền lần đầu, không thể bỏ qua)
+    startCamera();
+  </script>
+</body>
+</html>
