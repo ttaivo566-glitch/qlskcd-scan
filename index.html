@@ -51,6 +51,7 @@
       <tr><td class="label">Địa chỉ (số nhà, đường)</td><td id="r-diachi"></td></tr>
       <tr><td class="label">Phường</td><td id="r-phuong"></td></tr>
       <tr><td class="label">Tỉnh/Thành phố</td><td id="r-tinhtp"></td></tr>
+      <tr><td class="label">(Debug) Chuỗi gốc</td><td id="r-debug" style="font-size:11px;color:#999;"></td></tr>
       <tr><td class="label">Ngày cấp</td><td id="r-ngaycap"></td></tr>
     </table>
     <button class="btn btn-submit" id="btn-submit">Gửi lên Google Sheet</button>
@@ -205,6 +206,7 @@
       document.getElementById('r-diachi').textContent = data.dia_chi;
       document.getElementById('r-phuong').textContent = data.phuong;
       document.getElementById('r-tinhtp').textContent = data.tinh_thanhpho;
+      document.getElementById('r-debug').textContent = data.dia_chi_full;
       document.getElementById('r-ngaycap').textContent = data.ngay_cap;
       resultEl.style.display = 'block';
       document.getElementById('submit-status').textContent = '';
