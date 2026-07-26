@@ -8,6 +8,11 @@
     h3 { text-align: center; }
     #video-wrap { position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; }
     video { width: 100%; display: block; }
+    #scan-frame {
+      position: absolute; top: 12.5%; left: 12.5%; width: 75%; height: 75%;
+      border: 3px solid #28a745; border-radius: 8px; box-shadow: 0 0 0 999px rgba(0,0,0,0.35);
+      pointer-events: none;
+    }
     #status { text-align: center; padding: 10px; font-weight: bold; border-radius: 6px; margin: 10px 0; }
     .status-scanning { background: #e7f1ff; color: #0d6efd; }
     .status-success { background: #d4edda; color: #155724; }
@@ -31,6 +36,7 @@
 
   <div id="video-wrap">
     <video id="video" autoplay playsinline muted></video>
+    <div id="scan-frame"></div>
   </div>
   <canvas id="canvas" style="display:none;"></canvas>
 
@@ -81,7 +87,11 @@
     async function startCamera() {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } }
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 1280 },
+          }
         });
         video.srcObject = stream;
         await video.play();
@@ -94,11 +104,23 @@
 
     function scanLoop() {
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imgData.data, imgData.width, imgData.height);
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        // Chỉ xử lý vùng trung tâm (trong khung ngắm) thay vì toàn bộ khung hình
+        // -> ít pixel hơn = xử lý nhanh hơn nhiều, đồng thời tránh nhiễu từ nền xung quanh.
+        const cropSize = Math.floor(Math.min(vw, vh) * 0.75);
+        const sx = Math.floor((vw - cropSize) / 2);
+        const sy = Math.floor((vh - cropSize) / 2);
+        const targetSize = Math.min(cropSize, 700); // giới hạn kích thước xử lý để nhanh hơn
+
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        ctx.drawImage(video, sx, sy, cropSize, cropSize, 0, 0, targetSize, targetSize);
+
+        const imgData = ctx.getImageData(0, 0, targetSize, targetSize);
+        // dontInvert: bỏ bước thử ảnh đảo màu (CCCD luôn in chữ đen nền trắng)
+        // -> giảm gần một nửa thời gian xử lý mỗi khung hình
+        const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
         if (code && code.data) {
           handleDecoded(code.data);
           return;
