@@ -48,7 +48,9 @@
       <tr><td class="label">Họ và tên</td><td id="r-hoten"></td></tr>
       <tr><td class="label">Ngày sinh</td><td id="r-ngaysinh"></td></tr>
       <tr><td class="label">Giới tính</td><td id="r-gioitinh"></td></tr>
-      <tr><td class="label">Địa chỉ (theo QR)</td><td id="r-diachi"></td></tr>
+      <tr><td class="label">Địa chỉ (số nhà, đường)</td><td id="r-diachi"></td></tr>
+      <tr><td class="label">Phường</td><td id="r-phuong"></td></tr>
+      <tr><td class="label">Tỉnh/Thành phố</td><td id="r-tinhtp"></td></tr>
       <tr><td class="label">Ngày cấp</td><td id="r-ngaycap"></td></tr>
     </table>
     <button class="btn btn-submit" id="btn-submit">Gửi lên Google Sheet</button>
@@ -67,7 +69,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script>
     // Dán URL Web App Apps Script (deploy từ Code.gs) vào đây
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyV-caRI6u1eMT1pke1m-Q52HosNIPiE_GB0vkDnVyCI809pDY8nPuX_A0ERh1kK6IkvQ/exec';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
 
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
@@ -155,13 +157,19 @@
       if (genderDigit === '1' || genderDigit === '3') gioiTinh = 'Nữ';
       else if (genderDigit === '0' || genderDigit === '2') gioiTinh = 'Nam';
 
+      const diaChiFull = (parts[5] || '').trim();
+      const addressParts = splitAddress(diaChiFull);
+
       return {
         cccd: cccd,
         cmnd_cu: (parts[1] || '').trim(),
         ho_ten: (parts[2] || '').trim().toUpperCase(),
         ngay_sinh: formatDate((parts[3] || '').trim()),
         gioi_tinh: gioiTinh,
-        dia_chi_full: (parts[5] || '').trim(),
+        dia_chi: addressParts.dia_chi,
+        phuong: addressParts.phuong,
+        tinh_thanhpho: addressParts.tinh_thanhpho,
+        dia_chi_full: diaChiFull,
         ngay_cap: parts[6] ? formatDate(parts[6].trim()) : '',
       };
     }
@@ -171,12 +179,37 @@
       return raw.slice(0, 2) + '/' + raw.slice(2, 4) + '/' + raw.slice(4, 8);
     }
 
+    // Tách chuỗi địa chỉ QR (VD: "21/3 Lý Phục Mân, KP.29, Phường Tân Thuận, Quận 7, Thành phố Hồ Chí Minh")
+    // thành 3 phần: địa chỉ/đường (không gồm phường & tỉnh/thành), Phường, Tỉnh/Thành phố.
+    function splitAddress(fullAddress) {
+      if (!fullAddress) return { dia_chi: '', phuong: '', tinh_thanhpho: '' };
+      const segments = fullAddress.split(',').map((s) => s.trim()).filter(Boolean);
+      if (!segments.length) return { dia_chi: '', phuong: '', tinh_thanhpho: '' };
+
+      // Tỉnh/Thành phố luôn là đoạn cuối cùng
+      const tinhIndex = segments.length - 1;
+      const tinh_thanhpho = segments[tinhIndex];
+
+      // Đoạn chứa "Phường/Xã/Thị trấn"
+      const phuongIndex = segments.findIndex((s) => /^(Phường|Xã|Thị trấn)\s/i.test(s));
+      const phuong = phuongIndex !== -1 ? segments[phuongIndex] : '';
+
+      // Địa chỉ/đường = các đoạn còn lại, giữ đúng thứ tự
+      const dia_chi = segments
+        .filter((s, idx) => idx !== phuongIndex && idx !== tinhIndex)
+        .join(', ');
+
+      return { dia_chi, phuong, tinh_thanhpho };
+    }
+
     function showResult(data) {
       document.getElementById('r-cccd').textContent = data.cccd;
       document.getElementById('r-hoten').textContent = data.ho_ten;
       document.getElementById('r-ngaysinh').textContent = data.ngay_sinh;
       document.getElementById('r-gioitinh').textContent = data.gioi_tinh;
-      document.getElementById('r-diachi').textContent = data.dia_chi_full;
+      document.getElementById('r-diachi').textContent = data.dia_chi;
+      document.getElementById('r-phuong').textContent = data.phuong;
+      document.getElementById('r-tinhtp').textContent = data.tinh_thanhpho;
       document.getElementById('r-ngaycap').textContent = data.ngay_cap;
       resultEl.style.display = 'block';
       document.getElementById('submit-status').textContent = '';
