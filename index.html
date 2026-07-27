@@ -51,7 +51,6 @@
       <tr><td class="label">Địa chỉ (số nhà, đường)</td><td id="r-diachi"></td></tr>
       <tr><td class="label">Phường</td><td id="r-phuong"></td></tr>
       <tr><td class="label">Tỉnh/Thành phố</td><td id="r-tinhtp"></td></tr>
-      <tr><td class="label">(Debug) Chuỗi gốc</td><td id="r-debug" style="font-size:11px;color:#999;"></td></tr>
       <tr><td class="label">Ngày cấp</td><td id="r-ngaycap"></td></tr>
     </table>
     <button class="btn btn-submit" id="btn-submit">Gửi lên Google Sheet</button>
@@ -70,7 +69,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script>
     // Dán URL Web App Apps Script (deploy từ Code.gs) vào đây
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyV-caRI6u1eMT1pke1m-Q52HosNIPiE_GB0vkDnVyCI809pDY8nPuX_A0ERh1kK6IkvQ/exec';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
 
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
@@ -206,7 +205,6 @@
       document.getElementById('r-diachi').textContent = data.dia_chi;
       document.getElementById('r-phuong').textContent = data.phuong;
       document.getElementById('r-tinhtp').textContent = data.tinh_thanhpho;
-      document.getElementById('r-debug').textContent = data.dia_chi_full;
       document.getElementById('r-ngaycap').textContent = data.ngay_cap;
       resultEl.style.display = 'block';
       document.getElementById('submit-status').textContent = '';
